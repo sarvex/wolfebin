@@ -55,7 +55,9 @@ def init_config(crash_on_failure=True):
         if crash_on_failure:
             sys.exit("ERROR: wolfebin is not configured. try running: wolfebin init")
     except (ValueError, KeyError):
-        sys.exit("ERROR: wolfebin is corrupted. edit " + config_path_before_user_expansion)
+        sys.exit(
+            f"ERROR: wolfebin is corrupted. edit {config_path_before_user_expansion}"
+        )
 
 def save_config():
     try:
@@ -169,16 +171,18 @@ def int_to_human_binary(number):
 def int_to_human_time(seconds):
     """examples: 0s  59m59s  99h59m  100h  1000000h"""
     minutes = int(seconds / 60)
-    seconds = seconds % 60
-    hours = int(minutes / 60)
-    minutes = minutes % 60
+    hours = minutes // 60
+    minutes %= 60
     if hours > 99:
-        return str(hours) + "h"
+        return f"{str(hours)}h"
     if hours > 0:
-        return str(hours) + "h" + str(minutes).zfill(2) + "m"
-    if minutes > 0:
-        return str(minutes) + "m" + str(seconds).zfill(2) + "s"
-    return str(seconds) + "s"
+        return f"{str(hours)}h{str(minutes).zfill(2)}m"
+    seconds = seconds % 60
+    return (
+        f"{minutes}m{str(seconds).zfill(2)}s"
+        if minutes > 0
+        else f"{str(seconds)}s"
+    )
 
 
 # progress reporting
@@ -202,19 +206,19 @@ def progress(thus_far, eventual_total, time_tracker, banner_text):
         if elapsed_time > 1.0:
             # report time after some amount of time has passed
             speed = thus_far / elapsed_time
-            speed_str = int_to_human_binary(int(speed)) + "B/s"
+            speed_str = f"{int_to_human_binary(int(speed))}B/s"
             eta = (eventual_total - thus_far) / speed
             eta_str = int_to_human_time(int(eta))
     eta_space = len("59m59s")
-    line = " " + eta_str.rjust(eta_space) + line
+    line = f" {eta_str.rjust(eta_space)}{line}"
     speed_space = len("1023kB/s")
-    line = " " + speed_str.rjust(speed_space) + line
+    line = f" {speed_str.rjust(speed_space)}{line}"
 
     # fraction
     denominator_str = int_to_human_binary(eventual_total)
     numerator_space = len(str(eventual_total))
     numerator_str = str(thus_far).rjust(numerator_space)
-    line = " " + numerator_str + "/" + denominator_str + line
+    line = f" {numerator_str}/{denominator_str}{line}"
 
     # percent
     percent_space = len("%100.0")
@@ -223,7 +227,7 @@ def progress(thus_far, eventual_total, time_tracker, banner_text):
     except ZeroDivisionError:
         percent = 100.0
     percent_str = ("%%%.1f" % percent).rjust(percent_space)
-    line = " " + percent_str + line
+    line = f" {percent_str}{line}"
 
     # bar
     console_width = get_terminal_size()[1] - 1
@@ -237,10 +241,10 @@ def progress(thus_far, eventual_total, time_tracker, banner_text):
     if done_count == 0:
         arrow = ""
     else:
-        arrow_head = " " + banner_text + " =="
+        arrow_head = f" {banner_text} =="
         arrow = "=" * (done_count - len(arrow_head)) + arrow_head
         arrow = arrow[-done_count:]
-    bar_str = "[%s>%s]" % (arrow, " " * todo_count)
+    bar_str = f'[{arrow}>{" " * todo_count}]'
     line = bar_str + line
 
     write_to_stdout_maybe(line)
@@ -307,7 +311,7 @@ def put_func(paths, key, name_override):
         illegal_chars = set(r'<>:"/\|?*' + "".join(chr(x) for x in range(0x20)))
         illegal_names = [".", ".."]
         if any(c in illegal_chars for c in name_override) or name_override in illegal_names:
-            sys.exit("ERROR: illegal name: " + repr(name_override))
+            sys.exit(f"ERROR: illegal name: {repr(name_override)}")
 
     if paths == ("-",):
         # gotta read entire contents to get the size
@@ -339,7 +343,7 @@ def put_func(paths, key, name_override):
                     specific_dirs.append(abs_path)
                     specific_dirs_set.add(abs_path)
             else:
-                sys.exit("ERROR: not a file or directory: " + repr(path))
+                sys.exit(f"ERROR: not a file or directory: {repr(path)}")
 
         # remove paths already included by a parent directory
         for items_list, items_set in ((specific_dirs, specific_dirs_set), (specific_files, specific_files_set)):
@@ -360,7 +364,7 @@ def put_func(paths, key, name_override):
                 if is_single_specific_item:
                     reported_name = name_override
                 else:
-                    reported_name = name_override + "/" + reported_name
+                    reported_name = f"{name_override}/{reported_name}"
             size = os.path.getsize(specific_file)
             file_infos.append({
                 "name": reported_name,
@@ -378,7 +382,7 @@ def put_func(paths, key, name_override):
                     actual_path = os.path.join(dirpath, filename)
                     reported_name = "/".join(full_split(actual_path)[chop_off_this_many_parts_from_paths:])
                     if name_override != "":
-                        reported_name = name_override + "/" + reported_name
+                        reported_name = f"{name_override}/{reported_name}"
                     size = os.path.getsize(actual_path)
                     file_infos.append({
                         "name": reported_name,
@@ -478,7 +482,7 @@ def put_func(paths, key, name_override):
 
 # the get command
 def get_func(*keys, **kwargs):
-    if len(keys) == 0:
+    if not keys:
         keys = [""]
     if len(keys) != 1:
         sys.exit("ERROR: TODO: support 'get' with multiple keys")
@@ -494,14 +498,14 @@ def get_func(*keys, **kwargs):
     })
     file_infos = connection.read_json()["files"]
 
-    root_set = set(full_split(file_info["name"])[0] for file_info in file_infos)
+    root_set = {full_split(file_info["name"])[0] for file_info in file_infos}
     output_is_stdout = False
     output_prefix = None
     output_override = None
     if output_path == "-":
         output_is_stdout = True
     elif len(root_set) > 1 or os.path.isdir(output_path):
-        output_prefix = output_path + "/"
+        output_prefix = f"{output_path}/"
     else:
         output_override = output_path
     if output_prefix == "./":
@@ -561,7 +565,7 @@ def get_func(*keys, **kwargs):
         write_to_stdout_maybe("downloaded %s\n" % repr(started[0]))
     else:
         write_to_stdout_maybe("downloaded %i files:\n" % len(started))
-        started_roots_set = set(full_split(name)[0] for name in started)
+        started_roots_set = {full_split(name)[0] for name in started}
         names = []
         for name in started_roots_set:
             if os.path.isdir(name):
@@ -573,9 +577,7 @@ def get_func(*keys, **kwargs):
 
 should_print_to_stdout = True
 def write_to_stdout_maybe(msg):
-    stream = sys.stdout
-    if not should_print_to_stdout:
-        stream = sys.stderr
+    stream = sys.stderr if not should_print_to_stdout else sys.stdout
     stream.write(msg)
     stream.flush()
 
@@ -600,10 +602,10 @@ def list_func(*args, **kwargs):
     specific_key = None
     verbose = kwargs["verbose"]
     items = get_key_list()
-    if len(args) != 0:
+    if args:
         arg_set = set(args)
         items = [(key, file_infos) for (key, file_infos) in items if key in arg_set]
-        found_set = set(item[0] for item in items)
+        found_set = {item[0] for item in items}
         [sys.stderr.write("ERROR: key not found: %s\n" % key) for key in args if key not in found_set]
     if not verbose:
         # key names
@@ -623,18 +625,14 @@ def list_func(*args, **kwargs):
         ))
         indentation = " " * (max_key_len + len(justifiy_size(0)))
         for file_info in file_infos:
-            print("%s %s %s" % (
-                indentation,
-                justifiy_size(file_info["size"]),
-                file_info["name"],
-            ))
+            print(f'{indentation} {justifiy_size(file_info["size"])} {file_info["name"]}')
 
 def init_func():
     init_config(crash_on_failure=False)
     try:
         previous_hostname = ""
         if config["server_name"] != "":
-            previous_hostname = "(%s) " % config["server_name"]
+            previous_hostname = f'({config["server_name"]}) '
         while True:
             hostname = input("enter the hostname or I.P. address of the server.\n%s> " % previous_hostname)
             if hostname == "":
@@ -677,12 +675,12 @@ complete -F _wolfebin -o default wolfebin
 
 version_to_tuple = lambda version: tuple(int(x) for x in version.split("."))
 def version_func():
-    print("client version: " + __version__)
+    print(f"client version: {__version__}")
     connection = open_connection()
     connection.write_json({})
     connection.read_json()
     server_version = connection.other_version
-    print("server version: " + server_version)
+    print(f"server version: {server_version}")
     if version_to_tuple(__version__) < version_to_tuple(server_version):
         print("try the 'upgrade' command to update your client to the latest version.")
 
@@ -701,7 +699,7 @@ def upgrade_func():
     if ours > theirs:
         sys.exit("ERROR: server version is older than client version")
     path_to_self = os.path.realpath(sys.argv[0])
-    print("updating: " + path_to_self)
+    print(f"updating: {path_to_self}")
     with open(path_to_self, "w") as f:
         f.write(wolfebin_source)
 
@@ -761,8 +759,9 @@ def command_line_main():
     )
     commands.append(Command(init_parser, ["init"], (0, 0), init_func))
 
-    install_parser = optparse.OptionParser(usage="sudo %(prog)s install[-bash-completion]" % usage_variables, description=\
-        "Install bash completion to " + bash_completion_path + ".",
+    install_parser = optparse.OptionParser(
+        usage="sudo %(prog)s install[-bash-completion]" % usage_variables,
+        description=f"Install bash completion to {bash_completion_path}.",
     )
     commands.append(Command(install_parser, ["install", "install-bash-completion"], (0, 0), install_func))
 
@@ -786,14 +785,22 @@ def command_line_main():
         try:
             command = name_to_command[command_name]
         except KeyError:
-            sys.stderr.write("ERROR: invalid command: " + command_name + "\n")
-            print("command names:\n" + "\n".join("    " + name for name in sorted(name_to_command.keys())))
+            sys.stderr.write(f"ERROR: invalid command: {command_name}" + "\n")
+            print(
+                "command names:\n"
+                + "\n".join(
+                    f"    {name}" for name in sorted(name_to_command.keys())
+                )
+            )
             sys.exit(1)
         command.parser.print_help()
         sys.exit(1)
+
     commands.append(Command(help_parser, ["help"], (0, 1), help_func))
 
-    name_to_command = dict((name, command) for command in commands for name in command.names)
+    name_to_command = {
+        name: command for command in commands for name in command.names
+    }
     main_usage = "Usage:\n" + "\n".join(command.parser.get_usage()[len("Usage: "):-len("\n")] for command in commands)
 
     def perform_bash_completion(args):
@@ -807,7 +814,13 @@ def command_line_main():
             except KeyError:
                 # bad command. can't help you.
                 return ()
-            name_to_option = dict((name, option) for option in command.parser.option_list for name in itertools.chain(option._short_opts, option._long_opts))
+            name_to_option = {
+                name: option
+                for option in command.parser.option_list
+                for name in itertools.chain(
+                    option._short_opts, option._long_opts
+                )
+            }
             if word.startswith("-"):
                 # it's a switch
                 return name_to_option.keys()
@@ -815,6 +828,7 @@ def command_line_main():
             previous_word = words[words_index - 1]
             def get_just_the_keys():
                 return (item[0] for item in get_key_list())
+
             if previous_word.startswith("-"):
                 # previous word was a switch
                 try:
@@ -823,18 +837,10 @@ def command_line_main():
                     # can't help you
                     return ()
                 if option.takes_value():
-                    if option.metavar == "KEY":
-                        # do a list to find out how to complete this
-                        return get_just_the_keys()
-                    # can't help you with the value for this switch
-                    return ()
-                # the switch doesn't take a value, so nevermind
+                    return get_just_the_keys() if option.metavar == "KEY" else ()
+                            # the switch doesn't take a value, so nevermind
             # asking for completion on just a regular arg
-            if command.parser.usage.find("KEY...") != -1:
-                # args are keys. we can help.
-                return get_just_the_keys()
-            # you're probably just looking for files
-            return ()
+            return get_just_the_keys() if command.parser.usage.find("KEY...") != -1 else ()
 
         line_index = int(args[0])
         line = args[1]
@@ -849,6 +855,7 @@ def command_line_main():
             for c in special_characters:
                 s = s.replace(c, "\\" + c)
             return s
+
         def bash_resolve(s):
             """resolve backslash escapes and nested quotes"""
             # it's too bad shlex doesn't work with backslashes
@@ -879,10 +886,11 @@ def command_line_main():
                     else:
                         chars.append(c)
             return "".join(chars)
+
         # normalize the word
         word = bash_escape(bash_resolve(word))
         options = get_bash_completion_options(word, words_index, words)
-        options = set(bash_escape(option) for option in options)
+        options = {bash_escape(option) for option in options}
         results = [option for option in options if option.startswith(word)]
         return "\n".join(results)
 
@@ -910,17 +918,21 @@ def command_line_main():
             command = name_to_command["put"]
             args = [command_name] + args
         else:
-            sys.exit("ERROR: Unknown command, and not an existing path: " + command_name + "\n\n" + main_usage)
+            sys.exit(
+                f"ERROR: Unknown command, and not an existing path: {command_name}"
+                + "\n\n"
+                + main_usage
+            )
     else:
         if command_is_a_file:
             sys.stderr.write("WARNING: interpreting \"%s\" as a command. use \"./%s\" to interpret as a path instead.\n" % (command_name, command_name))
     (options, args) = command.parser.parse_args(args)
     if len(args) < command.args_range[0] or len(args) > command.args_range[1]:
-        sys.exit("Wrong number of arguments for command '" + command_name + "'.")
+        sys.exit(f"Wrong number of arguments for command '{command_name}'.")
     try:
         command.func(*args, **options.__dict__)
     except Connection.Error as e:
-        print("\n".join("ERROR: " + line for line in e.args[0].split("\n")))
+        print("\n".join(f"ERROR: {line}" for line in e.args[0].split("\n")))
 
 if __name__ == "__main__":
     command_line_main()

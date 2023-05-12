@@ -39,7 +39,7 @@ def write_json(path, json_object):
 try:
     config = read_json(config_path)
 except IOError:
-    sys.stderr.write("WARNING: initializing defaults in {}\n".format(config_path))
+    sys.stderr.write(f"WARNING: initializing defaults in {config_path}\n")
     write_json(config_path, config)
 
 if config["version"] > current_config_version:
@@ -51,7 +51,7 @@ file_data_dir = os.path.join(data_root, "files")
 def check_database():
     if os.path.exists(data_root):
         return
-    sys.stderr.write("WARNING: creating new database in {}\n".format(data_root))
+    sys.stderr.write(f"WARNING: creating new database in {data_root}\n")
     os.mkdir(data_root)
     os.mkdir(file_data_dir)
     save_database({})
@@ -100,7 +100,7 @@ def get(connection, request):
             session = find_session(key)
             file_handle = open_file(key_hash, "rb")
     except KeyError:
-        connection.write_error("key not found: " + repr(key))
+        connection.write_error(f"key not found: {repr(key)}")
         return
     try:
         connection.write_json({
@@ -110,7 +110,7 @@ def get(connection, request):
             read_size = 0
             chunks = []
             while read_size < size:
-                session_is_done = session == None or session.is_done
+                session_is_done = session is None or session.is_done
                 chunk = file_handle.read(size - read_size)
                 if len(chunk) != 0:
                     chunks.append(chunk)
@@ -193,9 +193,10 @@ def put(connection, request):
         finally:
             if not good:
                 file_handle.close()
+
     file_handle = attempt_continue()
     with state_lock:
-        if file_handle == None:
+        if file_handle is None:
             database = get_database()
             database[key] = entry
             save_database(database)
@@ -261,8 +262,10 @@ def delete(connection, request):
                 continue
             delete_file(key_hash)
             save_database(database)
-    if len(missing_keys) != 0:
-        connection.write_error("\n".join("key not found: " + repr(key) for key in missing_keys))
+    if missing_keys:
+        connection.write_error(
+            "\n".join(f"key not found: {repr(key)}" for key in missing_keys)
+        )
     else:
         connection.write_json({})
 
@@ -278,6 +281,9 @@ def upgrade(connection):
     })
 
 def server_forever():
+
+
+
     class ConnectionHandler(SocketServer.BaseRequestHandler):
         def handle(self):
             connection = Connection(self.request)
@@ -298,7 +304,9 @@ def server_forever():
             elif command == "upgrade":
                 upgrade(connection)
             else:
-                connection.write_error("bad command: " + json.dumps(command))
+                connection.write_error(f"bad command: {json.dumps(command)}")
+
+
     class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         allow_reuse_address = True
     server = ThreadedTCPServer((config["host_name"], config["port_number"]), ConnectionHandler)
